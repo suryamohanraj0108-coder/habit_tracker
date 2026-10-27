@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Habit Tracker</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: linear-gradient(to right, #74ebd5, #ACB6E5); }
+  h1 { text-align: center; color: #333; }
+  .container { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); }
+  input, button { padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ccc; }
+  button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+  button:hover { background: #45a049; }
+  ul { list-style-type: none; padding: 0; }
+  li { margin: 10px 0; padding: 12px; border-radius: 8px; background: #f9f9f9; display: flex; justify-content: space-between; align-items: center; box-shadow: 0px 2px 5px rgba(0,0,0,0.1); }
+  .done { text-decoration: line-through; color: green; font-weight: bold; }
+  .progress-container { margin-top: 20px; }
+  .progress-bar { width: 100%; background: #ddd; border-radius: 8px; overflow: hidden; height: 20px; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(to right, #00c6ff, #0072ff); text-align: center; color: white; font-size: 12px; transition: width 0.5s; }
+  .streak { font-size: 12px; color: #555; margin-left: 10px; }
+</style>
+</head>
+<body>
+<h1>✅ Voice Habit Tracker</h1>
+<div class="container">
+  <input type="text" id="habitInput" placeholder="Enter a habit (or use voice)">
+  <button onclick="addHabit()">Add Habit</button>
+  <button id="voiceBtn">🎤 Add/Toggle via Voice</button>
+
+  <ul id="habitList"></ul>
+
+  <div class="progress-container">
+    <p><strong>Overall Progress</strong></p>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill">0%</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const habitInput = document.getElementById("habitInput");
+const habitList = document.getElementById("habitList");
+const progressFill = document.getElementById("progressFill");
+let habits = JSON.parse(localStorage.getItem("habits")) || [];
+
+// Render habits
+function renderHabits() {
+  habitList.innerHTML = "";
+  habits.forEach((habit, index) => {
+    let li = document.createElement("li");
+    li.innerHTML = `
+      <span class="${habit.done ? 'done' : ''}">${habit.name}</span>
+      <div>
+        <span class="streak">🔥 Streak: ${habit.streak || 0}</span>
+        <button onclick="toggleHabit(${index})">${habit.done ? 'Undo' : 'Done'}</button>
+        <button onclick="deleteHabit(${index})">❌</button>
+      </div>
+    `;
+    habitList.appendChild(li);
+  });
+  updateProgress();
+}
+
+// Add habit
+function addHabit(name = null) {
+  const habitName = name || habitInput.value.trim();
+  if (habitName) {
+    habits.push({ name: habitName, done: false, streak: 0, lastCompleted: null });
+    habitInput.value = "";
+    saveHabits();
+    renderHabits();
+  }
+}
+
+// Toggle habit done/undo
+function toggleHabit(index) {
+  let today = new Date().toDateString();
+  let habit = habits[index];
+  if (!habit.done) {
+    if (habit.lastCompleted === today) {} 
+    else if (habit.lastCompleted === new Date(Date.now() - 86400000).toDateString()) habit.streak += 1;
+    else habit.streak = 1;
+    habit.done = true;
+    habit.lastCompleted = today;
+  } else habit.done = false;
+  saveHabits();
+  renderHabits();
+}
+
+// Delete habit
+function deleteHabit(index) {
+  habits.splice(index, 1);
+  saveHabits();
+  renderHabits();
+}
+
+// Update progress bar
+function updateProgress() {
+  if (habits.length === 0) {
+    progressFill.style.width = "0%";
+    progressFill.textContent = "0%";
+    return;
+  }
+  let doneCount = habits.filter(h => h.done).length;
+  let percent = Math.round((doneCount / habits.length) * 100);
+  progressFill.style.width = percent + "%";
+  progressFill.textContent = percent + "%";
+}
+
+// Save habits to localStorage
+function saveHabits() {
+  localStorage.setItem("habits", JSON.stringify(habits));
+}
+
+// --- Voice Integration ---
+const voiceBtn = document.getElementById("voiceBtn");
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onstart = () => voiceBtn.textContent = "🎤 Listening...";
+  recognition.onend = () => voiceBtn.textContent = "🎤 Add/Toggle via Voice";
+  recognition.onerror = (e) => alert("Error: " + e.error);
+
+  recognition.onresult = (e) => {
+    const command = e.results[0][0].transcript.toLowerCase().trim();
+    // Check for add or toggle commands
+    let found = false;
+    habits.forEach((habit, index) => {
+      if (habit.name.toLowerCase() === command) {
+        toggleHabit(index);
+        found = true;
+      }
+    });
+    if (!found) addHabit(command);
+  };
+
+  voiceBtn.onclick = () => recognition.start();
+} else {
+  voiceBtn.disabled = true;
+  voiceBtn.textContent = "Voice Not Supported";
+}
+
+// Initial render
+renderHabits();
+</script>
+</body>
+</html>
